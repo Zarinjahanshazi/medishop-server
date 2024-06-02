@@ -30,6 +30,7 @@ async function run() {
     const userCollection = client.db("mediShop").collection("users");
     const categoryCollection = client.db("mediShop").collection("categories");
     const queriesCollection = client.db("mediShop").collection("queries");
+    const mainCategoryCollection = client.db("mediShop").collection("maincategory");
 
 
      //user related API
@@ -60,10 +61,52 @@ async function run() {
     app.get('/categories/:category', async (req, res) => {
         const category = req.params.category;
         const query = { category: category };
-        const cursor =  await categoryCollection.find(query);
-        const result = await cursor.toArray();
+        const result =  await categoryCollection.find(query).toArray();
+        // const result = await cursor.toArray();
         res.send(result);
     });
+    // app.get('/categories/:discount', async (req, res) => {
+    //     const category = req.params.category;
+    //     const query = { category: category };
+    //     const result =  await categoryCollection.find(query).toArray();
+    //     // const result = await cursor.toArray();
+    //     res.send(result);
+    // });
+
+
+    // main category related api
+    app.get("/maincategory", async (req, res) => {
+        const result = await mainCategoryCollection
+          .aggregate([
+            {
+              $lookup: {
+                from: "categories",
+                localField: "name",
+                foreignField: "category",
+                as: "medicine",
+              },
+            },
+            {
+              $addFields: {
+                categoriesCount: { $size: "$medicine" },
+              },
+            },
+            {
+              $project: {
+                medicine: 0,
+              },
+            },
+          ])
+          .toArray();
+        res.send(result);
+      });
+    // app.get('/categories/:category', async (req, res) => {
+    //     const category = req.params.category;
+    //     const query = { category: category };
+    //     const cursor =  await categoryCollection.find(query);
+    //     const result = await cursor.toArray();
+    //     res.send(result);
+    // });
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
