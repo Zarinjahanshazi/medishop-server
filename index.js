@@ -72,7 +72,17 @@ async function run() {
     //     // const result = await cursor.toArray();
     //     res.send(result);
     // });
-
+    app.get('/discounts', async (req, res) => {
+        try {
+            const query = { discount: { $gt: 0 } };
+            const result = await categoryCollection.find(query).toArray();
+            res.send(result);
+        } catch (error) {
+            console.error(error);
+            res.status(500).send('An error occurred while fetching discounted products');
+        }
+    });
+    
 
     // main category related api
     app.get("/maincategory", async (req, res) => {
