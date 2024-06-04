@@ -3,7 +3,7 @@ const app = express();
 const cors = require('cors');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
-
+const jwt = require("jsonwebtoken");
 
 //middleware
 app.use(cors());
@@ -107,32 +107,52 @@ async function run() {
         res.send(result);
     });
     
-
     // main category related api
     app.get("/maincategory", async (req, res) => {
-        const result = await mainCategoryCollection
-          .aggregate([
-            {
-              $lookup: {
-                from: "categories",
-                localField: "name",
-                foreignField: "category",
-                as: "medicine",
+        try {
+          const result = await mainCategoryCollection
+            .aggregate([
+              {
+                $lookup: {
+                  from: "categories",
+                  localField: "name",
+                  foreignField: "category",
+                  as: "medisine",
+                },
               },
-            },
-            {
-              $addFields: {
-                categoriesCount: { $size: "$medicine" },
+              {
+                $addFields: {
+                  categoriesCount: { $size: "$medisine" },
+                },
               },
-            },
-            {
-              $project: {
-                medicine: 0,
+              {
+                $project: {
+                  medisine: 0,
+                },
               },
-            },
-          ])
-          .toArray();
-        res.send(result);
+            ])
+            .toArray();
+          console.log(result);
+          res.send(result);
+        } catch (error) {
+          res.send(error);
+        }
+      });
+
+    //   jwt related Api
+    app.post("/jwt", async (req, res) => {
+        const body = req.body;
+        const user = await userCollection.findOne({ email: body.email });
+        const userData = {
+          email: user.email,
+          role: user.role,
+        };
+        if (user) {
+          const token = jwt.sign(userData, process.env.PRIVET_KEY, {
+            expiresIn: 60 * 60,
+          });
+          res.send({ token });
+        }
       });
     // app.get('/categories/:category', async (req, res) => {
     //     const category = req.params.category;
