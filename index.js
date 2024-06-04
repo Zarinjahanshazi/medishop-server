@@ -34,6 +34,35 @@ async function run() {
     const cartCollection = client.db("mediShop").collection("carts");
 
 
+    //   jwt related Api
+    app.post("/jwt", async (req, res) => {
+        const body = req.body;
+        const user = await userCollection.findOne({ email: body.email });
+        const userData = {
+          email: user.email,
+          role: user.role,
+        };
+        if (user) {
+          const token = jwt.sign(userData, process.env.PRIVET_KEY, {
+            expiresIn: 60 * 60,
+          });
+          res.send({ token });
+        }
+      });
+    const verifyJWT = (req, res, next) => {
+        const token = req.headers.authorization;
+        if (!token) {
+          return res.status(401).send({ error: true, message: "unauthorized" });
+        }
+        jwt.verify(token, process.env.PRIVET_KEY, (error, decoded) => {
+          if (error) {
+            return res.status(401).send({ error: true, message: "unauthorized" });
+          }
+          req.decoded = decoded;
+          next();
+        });
+      };
+      
      //user related API
      app.get('/users',async(req,res) =>{
         const result = await userCollection.find().toArray();
@@ -47,11 +76,16 @@ async function run() {
         res.send(result);
       });
 
-      //queries related API
-      app.get('/queries',async(req,res) =>{
-        const result = await queriesCollection.find().toArray();
+      app.get("/me", async (req, res) => {
+        const { email } = req.query;
+        const result = await userCollection.findOne(
+          { email: email },
+          { projection: { name: 0, photo: 0 } }
+        );
         res.send(result);
-    });
+      });
+
+    
 
       //categories related API
       app.get('/categories',async(req,res) =>{
@@ -139,26 +173,17 @@ async function run() {
         }
       });
 
-    //   jwt related Api
-    app.post("/jwt", async (req, res) => {
-        const body = req.body;
-        const user = await userCollection.findOne({ email: body.email });
-        const userData = {
-          email: user.email,
-          role: user.role,
-        };
-        if (user) {
-          const token = jwt.sign(userData, process.env.PRIVET_KEY, {
-            expiresIn: 60 * 60,
-          });
-          res.send({ token });
-        }
-      });
+    
     // app.get('/categories/:category', async (req, res) => {
     //     const category = req.params.category;
     //     const query = { category: category };
     //     const cursor =  await categoryCollection.find(query);
     //     const result = await cursor.toArray();
+    //     res.send(result);
+    // });
+      //queries related API
+    //   app.get('/queries',async(req,res) =>{
+    //     const result = await queriesCollection.find().toArray();
     //     res.send(result);
     // });
 
