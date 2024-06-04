@@ -31,6 +31,7 @@ async function run() {
     const categoryCollection = client.db("mediShop").collection("categories");
     const queriesCollection = client.db("mediShop").collection("queries");
     const mainCategoryCollection = client.db("mediShop").collection("maincategory");
+    const cartCollection = client.db("mediShop").collection("carts");
 
 
      //user related API
@@ -65,6 +66,21 @@ async function run() {
         // const result = await cursor.toArray();
         res.send(result);
     });
+    // send medicine in database by seller
+    app.post("/category", async (req, res) => {
+        const data = req.body;
+        try {
+          const result = await categoryCollection.insertOne(data);
+          res.json(result);
+        } catch (error) {
+          res.json(error);
+        }
+      });
+    //   get medicine from database add by seller
+      app.get('/category',async(req,res) =>{
+        const result = await categoryCollection.find().toArray();
+        res.send(result);
+    });
     // app.get('/categories/:discount', async (req, res) => {
     //     const category = req.params.category;
     //     const query = { category: category };
@@ -81,6 +97,14 @@ async function run() {
             console.error(error);
             res.status(500).send('An error occurred while fetching discounted products');
         }
+    });
+
+
+    //cart related api
+    app.post('/carts', async(req,res) =>{
+        const cartItem = req.body;
+        const result = await cartCollection.insertOne(cartItem);
+        res.send(result);
     });
     
 
