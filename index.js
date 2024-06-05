@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 const jwt = require("jsonwebtoken");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 //middleware
 app.use(cors());
@@ -32,7 +33,7 @@ async function run() {
     const queriesCollection = client.db("mediShop").collection("queries");
     const mainCategoryCollection = client.db("mediShop").collection("maincategory");
     const cartCollection = client.db("mediShop").collection("carts");
-
+    const paymentCollection = client.db("mediShop").collection("paymentHistory");
 
     //   jwt related Api
     app.post("/jwt", async (req, res) => {
@@ -115,6 +116,38 @@ async function run() {
         const result = await categoryCollection.find().toArray();
         res.send(result);
     });
+
+
+    // payment
+    app.post("/create-payment-intent", async (req, res) => {
+        try {
+          const { price } = req.body;
+          console.log(price);
+          if (!price || typeof price !== "number") {
+            return res.status(400).send({ error: "Invalid price value" });
+          }
+          const amount = price * 100;
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: amount,
+            currency: "usd",
+            payment_method_types: ["card"],
+          });
+  
+          console.log(paymentIntent);
+          res.send({
+            clientSecret: paymentIntent.client_secret,
+          });
+        } catch (error) {
+          console.error("Error creating payment intent:", error);
+          res.status(500).send({ error: "Failed to create payment intent" });
+        }
+      });
+  
+      app.post("/paymentH", async (req, res) => {
+        const data = req.body;
+        const result = await paymentCollection.insertOne(data);
+        res.send(result);
+      });
     // app.get('/categories/:discount', async (req, res) => {
     //     const category = req.params.category;
     //     const query = { category: category };
