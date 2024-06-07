@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = "mongodb+srv://mediUser:m5KBmjoNAUBdm3Wz@cluster0.s8jaol5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -116,7 +116,114 @@ async function run() {
         const result = await categoryCollection.find().toArray();
         res.send(result);
     });
+    //admin
 
+    app.get("/sellsReport", async (req, res) => {
+        try {
+          const { startDate, endDate } = req.query;
+  
+          const matchConditions = {};
+  
+          if (startDate) {
+            matchConditions.date = matchConditions.date || {};
+            matchConditions.date.$gte = new Date(startDate);
+          }
+  
+          if (endDate) {
+            matchConditions.date = matchConditions.date || {};
+            matchConditions.date.$lte = new Date(endDate);
+          }
+          console.log(matchConditions);
+  
+          const result = await paymentCollection
+            .aggregate([
+              { $match: { ...matchConditions, paymentStatus: "paid" } },
+              // { $sort: { date: -1 } },
+              { $unwind: "$medicines" },
+              {
+                $lookup: {
+                  from: "categories",
+                  let: {
+                    medicineId: {
+                      $arrayElemAt: [{ $objectToArray: "$medicines" }, 0],
+                    },
+                  },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $eq: ["$_id", { $toObjectId: "$$medicineId.k" }],
+                        },
+                      },
+                    },
+                    {
+                      $addFields: {
+                        quantity: "$$medicineId.v",
+                        tPrice: {
+                          $multiply: [
+                            "$$medicineId.v",
+                            { $toDouble: "$price_per_unit" },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                  as: "medicineDetails",
+                },
+              },
+              { $unwind: "$medicineDetails" },
+              {
+                $addFields: {
+                  sellerId: { $toObjectId: "$medicineDetails.sellerId" },
+                },
+              },
+              {
+                $lookup: {
+                  from: "users",
+                  localField: "sellerId",
+                  foreignField: "_id",
+                  as: "sellerDetails",
+                },
+              },
+              // { $unwind: "$sellerDetails" },
+              {
+                $project: {
+                  "medicineDetails.description": 0,
+                  "medicineDetails.company_name": 0,
+                  "medicineDetails.category": 0,
+                  "medicineDetails.image": 0,
+                  "medicineDetails.discount": 0,
+                  "sellerDetails.password": 0,
+                  "sellerDetails.otherSensitiveField": 0,
+                },
+              },
+              {
+                $group: {
+                  _id: "$_id",
+                  email: { $first: "$email" },
+                  totalPrice: { $first: "$totalPrice" },
+                  date: { $first: "$date" },
+                  transectionId: { $first: "$transectionId" },
+                  paymentStatus: { $first: "$paymentStatus" },
+                  medicines: {
+                    $push: {
+                      $mergeObjects: [
+                        "$medicineDetails",
+                        { sellerEmail: "$sellerDetails.email" },
+                      ],
+                    },
+                  },
+                },
+              },
+              { $sort: { date: -1 } },
+            ])
+            .toArray();
+          res.send(result);
+        } catch (error) {
+          console.error("Error retrieving payments", error);
+          res.status(500).send({ error: "Failed to retrieve payments" });
+        }
+      });
 
     // payment
     app.post("/create-payment-intent", async (req, res) => {
@@ -147,6 +254,154 @@ async function run() {
         const data = req.body;
         const result = await paymentCollection.insertOne(data);
         res.send(result);
+      });
+
+
+      app.get("/paymentH", async (req, res) => {
+        try {
+          const { email } = req.query;
+          const result = await paymentCollection
+            .aggregate([
+              { $match: { email } },
+              {
+                $unwind: "$medicines",
+              },
+              {
+                $lookup: {
+                  from: "categories",
+                  let: {
+                    medicineId: {
+                      $arrayElemAt: [{ $objectToArray: "$medicines" }, 0],
+                    },
+                  },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $eq: ["$_id", { $toObjectId: "$$medicineId.k" }],
+                        },
+                      },
+                    },
+                    {
+                      $addFields: {
+                        quantity: "$$medicineId.v",
+                        tPrice: {
+                          $multiply: ["$$medicineId.v", "$price_per_unit"],
+                        },
+                      },
+                    },
+                  ],
+                  as: "medicineDetails",
+                },
+              },
+              {
+                $unwind: "$medicineDetails",
+              },
+              {
+                $project: {
+                  "medicineDetails.description": 0,
+                  "medicineDetails.company_name": 0,
+                  "medicineDetails.category": 0,
+                },
+              },
+              {
+                $group: {
+                  _id: "$_id",
+                  email: { $first: "$email" },
+                  totalPrice: { $first: "$totalPrice" },
+                  date: { $first: "$date" },
+                  transectionId: { $first: "$transectionId" },
+                  paymentStatus: { $first: "$paymentStatus" },
+                  medicines: { $push: "$medicineDetails" },
+                },
+              },
+              { $sort: { date: -1 } },
+              { $limit: 1 },
+              // {
+              //   $unwind: {},
+              // },
+            ])
+            .next();
+  
+          res.send(result);
+        } catch (error) {
+          console.error("Error retrieving payments", error);
+          res.status(500).send({ error: "Failed to retrieve payments" });
+        }
+      });
+
+      app.get("/mePaymentH", async (req, res) => {
+        console.log(req.query);
+        try {
+          const { email } = req.query;
+          console.log(email);
+          const result = await paymentCollection
+            .aggregate([
+              { $match: { email } },
+              {
+                $unwind: "$medicines",
+              },
+              {
+                $lookup: {
+                  from: "categories",
+                  let: {
+                    medicineId: {
+                      $arrayElemAt: [{ $objectToArray: "$medicines" }, 0],
+                    },
+                  },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $eq: ["$_id", { $toObjectId: "$$medicineId.k" }],
+                        },
+                      },
+                    },
+                    {
+                      $addFields: {
+                        quantity: "$$medicineId.v",
+                        tPrice: {
+                          $multiply: [
+                            "$$medicineId.v",
+                            { $toDouble: "$price_per_unit" },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                  as: "medicineDetails",
+                },
+              },
+              {
+                $unwind: "$medicineDetails",
+              },
+              {
+                $project: {
+                  "medicineDetails.description": 0,
+                  "medicineDetails.company_name": 0,
+                  "medicineDetails.category": 0,
+                },
+              },
+              {
+                $group: {
+                  _id: "$_id",
+                  email: { $first: "$email" },
+                  totalPrice: { $first: "$totalPrice" },
+                  date: { $first: "$date" },
+                  transectionId: { $first: "$transectionId" },
+                  paymentStatus: { $first: "$paymentStatus" },
+                  medicines: { $push: "$medicineDetails" },
+                },
+              },
+              { $sort: { date: -1 } },
+            ])
+            .toArray();
+  
+          res.send(result);
+        } catch (error) {
+          console.error("Error retrieving payments", error);
+          res.status(500).send({ error: "Failed to retrieve payments" });
+        }
       });
     // app.get('/categories/:discount', async (req, res) => {
     //     const category = req.params.category;
@@ -206,7 +461,29 @@ async function run() {
         }
       });
 
+
+      app.get("/allpayment", async (req, res) => {
+        const result = await paymentCollection
+          .find({}, { sort: { data: -1 } })
+          .toArray();
+        res.send(result);
+      });
     
+      app.patch("/changeStatusPayment/:id", async (req, res) => {
+        const { id } = req.params;
+        const data = {
+          paymentStatus: "paid",
+        };
+        const result = await paymentCollection.updateOne(
+          {
+            _id: new ObjectId(id)
+          },
+          {
+            $set: { ...data },
+          }
+        );
+        res.send(result);
+      });
     // app.get('/categories/:category', async (req, res) => {
     //     const category = req.params.category;
     //     const query = { category: category };
