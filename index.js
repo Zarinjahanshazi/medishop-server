@@ -734,16 +734,16 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
-    app.get('/discounts', async (req, res) => {
-      try {
-          const query = { discount: { $gt: 0 } };
-          const result = await categoryCollection.find(query).toArray();
-          res.send(result);
-      } catch (error) {
-          console.error(error);
-          res.status(500).send('An error occurred while fetching discounted products');
-      }
-  });
+  //   app.get('/discounts', async (req, res) => {
+  //     try {
+  //         const query = { discount: { $gt: 0 } };
+  //         const result = await categoryCollection.find(query).toArray();
+  //         res.send(result);
+  //     } catch (error) {
+  //         console.error(error);
+  //         res.status(500).send('An error occurred while fetching discounted products');
+  //     }
+  // });
     // app.get("/sellerPaymentHistory", async (req, res) => {
     //   try {
     //     const { email } = req.query;
@@ -935,7 +935,6 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
-
 
 
 
