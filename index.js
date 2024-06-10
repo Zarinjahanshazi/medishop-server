@@ -816,6 +816,101 @@ async function run() {
     //       .send({ error: "Failed to retrieve seller payment history" });
     //   }
     // });
+    
+    app.get("/sellerRevenue", async (req, res) => {
+      try {
+        const { email } = req.query;
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        const totalPaid = 0;
+        // Aggregate to find payments related to the seller
+        const result = await categoryCollection
+          .aggregate([
+            {
+              $match: { sellerId: user._id.toString() },
+            },
+            {
+              $lookup: {
+                from: "paymentHistory",
+                let: { categoryId: "$_id" },
+                pipeline: [
+                  { $unwind: "$medicines" },
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: [
+                          "$$categoryId",
+                          {
+                            $toObjectId: {
+                              $first: {
+                                $map: {
+                                  input: { $objectToArray: "$medicines" },
+                                  as: "med",
+                                  in: "$$med.k",
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
+                as: "paymentData",
+              },
+            },
+            {
+              $unwind: "$paymentData",
+            },
+            {
+              $project: {
+                paymentData: 1,
+              },
+            },
+          ])
+          .toArray();
+        const totalPending = result?.reduce(
+          (pre, curr) => pre + parseFloat(curr?.paymentData?.totalPrice),
+          0
+        );
+        console.log(totalPending);
+        res.send({
+          pending: result.length,
+          paid: 0,
+          totalPending,
+          totalPaid,
+          totalPrice: totalPending + totalPaid,
+        });
+        // res.send(result);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Error fetching seller revenue data", error });
+      }
+    });
+    
+    app.get("/revenueAdmin", async (req, res) => {
+      const result = await paymentCollection.find().toArray();
+      const totalPrice = result.reduce((accumulator, currentValue) => {
+        return accumulator + parseFloat(currentValue.totalPrice);
+      }, 0);
+      // const totalP
+      const paid = (
+        await paymentCollection.find({ paymentStatus: "paid" }).toArray()
+      ).length;
+      const pending = (
+        await paymentCollection.find({ paymentStatus: "pending" }).toArray()
+      ).length;
+      const totalUser = (await userCollection.find().toArray()).length - 1;
+      res.send({
+        totalPrice,
+        paid,
+        pending,
+        totalUser,
+      });
+    });
     app.get("/sellerPaymentHistory", async (req, res) => {
       try {
         const { email } = req.query;
@@ -859,6 +954,7 @@ async function run() {
                           },
                         ],
                       },
+                      paymentStatus: { $in: ["pending", "paid"] },
                     },
                   },
                 ],
@@ -874,7 +970,16 @@ async function run() {
                 price_per_unit: 1,
                 description: 1,
                 discount: 1,
-                paymentData: 1,
+                paymentData: {
+                  paymentStatus: 1,
+                  email: 1,
+                  _id: 1, // Optionally include other fields you need
+                },
+              },
+            },
+            {
+              $match: {
+                "paymentData.paymentStatus": { $in: ["pending", "paid"] },
               },
             },
           ])
